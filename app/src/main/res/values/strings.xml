@@ -1,3 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name" translatable="false">gmail</string>
+    <string name="app_name" translatable="false">Aurora Mail</string>
+    <string name="brand_name" translatable="false">AURORA</string>
+    <string name="brand_tagline" translatable="false">MAIL · STUDIO</string>
+
+    <!-- Main screen -->
+    <string name="section_compose">НОВОЕ ПИСЬМО</string>
+    <string name="section_attachments">ВЛОЖЕНИЯ</string>
+    <string name="hint_to">Кому</string>
+    <string name="hint_subject">Тема письма</string>
+    <string name="hint_body">Напишите что-нибудь прекрасное…</string>
+    <string name="send">Отправить письмо</string>
+    <string name="add_one">Один файл</string>
+    <string name="add_many">Несколько</string>
+    <string name="status_ready">Готово к отправке</string>
+    <string name="status_not_configured">Нужна настройка</string>
+    <string name="status_hint">Нажмите, чтобы указать почту и пароль</string>
+    <string name="stat_sent">писем отправлено</string>
+    <string name="stat_files">файлов отправлено</string>
+    <string name="attachments_empty">Файлы пока не выбраны</string>
+    <string name="attachment_count_one">%1$d файл</string>
+    <string name="attachment_count_many">%1$d файл.</string>
+    <string name="attachment_unknown_size">размер неизвестен</string>
+    <string name="footer_note">Защищённое соединение · данные только на устройстве</string>
+    <string name="sending_title">Отправляем письмо…</string>
+    <string name="sending_subtitle">Немного магии и пара секунд</string>
+    <string name="success_title">Готово!</string>
+    <string name="success_subtitle">Письмо успешно отправлено</string>
+    <string name="success_attachments">Вложений: %1$d</string>
+    <string name="success_close">Отлично</string>
+
+    <!-- Errors / hints -->
+    <string name="error_no_config">Сначала укажите почту и пароль приложения в настройках</string>
+    <string name="error_email">Проверьте адрес получателя</string>
+    <string name="error_no_network">Нет подключения к интернету</string>
+    <string name="error_bad_settings">Проверьте настройки SMTP</string>
+    <string name="action_settings">Настройки</string>
+    <string name="error_auth">Не удалось войти. Проверьте почту и пароль приложения</string>
+    <string name="error_connection">Нет связи с почтовым сервером. Проверьте интернет и настройки</string>
+    <string name="subject_empty">(без темы)</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_subtitle">Аккаунт и SMTP-соединение</string>
+    <string name="section_account">АККАУНТ</string>
+    <string name="section_server">СЕРВЕР</string>
+    <string name="hint_account_email">Ваша почта Gmail</string>
+    <string name="hint_app_password">Пароль приложения</string>
+    <string name="hint_sender_name">Имя отправителя</string>
+    <string name="hint_default_to">Получатель по умолчанию</string>
+    <string name="hint_smtp_host">SMTP-хост</string>
+    <string name="hint_smtp_port">Порт</string>
+    <string name="label_ssl">Использовать SSL (порт 465)</string>
+    <string name="save">Сохранить настройки</string>
+    <string name="test_connection">Проверить соединение</string>
+    <string name="settings_saved">Настройки сохранены</string>
+    <string name="connection_ok">Соединение установлено · всё работает</string>
+    <string name="checking">Проверяем соединение…</string>
+    <string name="help_title">Как получить пароль приложения</string>
+    <string name="help_body">Включите двухэтапную аутентификацию в Google Аккаунте, затем создайте 16-значный пароль приложения для «Почты». Обычный пароль от аккаунта здесь не подойдёт.</string>
+    <string name="help_open">Открыть страницу паролей приложений</string>
+    <string name="security_note">Почта и пароль шифруются ключом Android Keystore и не покидают устройство. Экран настроек защищён от скриншотов.</string>
+    <string name="error_settings_email">Введите корректный адрес</string>
+    <string name="error_settings_port">Порт от 1 до 65535</string>
+    <string name="error_settings_host">Укажите SMTP-хост</string>
+    <string name="error_settings_password">Укажите пароль приложения</string>
+    <string name="error_no_browser">Не удалось открыть браузер</string>
+    <string name="clear_settings">Очистить настройки</string>
+    <string name="clear_confirm_title">Очистить настройки?</string>
+    <string name="clear_confirm_message">Почта и пароль приложения будут удалены с устройства.</string>
+    <string name="clear_confirm_yes">Очистить</string>
+    <string name="clear_confirm_no">Отмена</string>
+    <string name="settings_cleared">Настройки удалены</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_settings">Настройки</string>
+    <string name="cd_back">Назад</string>
+    <string name="cd_logo">Логотип</string>
+    <string name="cd_remove">Удалить вложение</string>
+    <string name="cd_status">Состояние подключения</string>
 </resources>

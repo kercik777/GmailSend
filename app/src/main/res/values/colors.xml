@@ -1,7 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<color name="colorPrimary">#6076AC</color>
-	<color name="colorPrimaryDark">#6076AC</color>
-	<color name="colorAccent">#6076AC</color>
-	<color name="colorControlHighlight">#D9E2FF</color>
-	<color name="colorControlNormal">#6076AC</color>
+    <!-- Aurora palette -->
+    <color name="bg_deep">#080B16</color>
+    <color name="bg_top">#0B1020</color>
+    <color name="bg_bottom">#151C33</color>
+    <color name="surface">#151C30</color>
+    <color name="surface_high">#202A46</color>
+    <color name="stroke_soft">#2A3454</color>
+    <color name="stroke_bright">#4A557F</color>
+
+    <color name="violet">#7C6BFF</color>
+    <color name="violet_light">#AC9DFF</color>
+    <color name="mint">#3DE8C5</color>
+    <color name="pink">#FF74B0</color>
+    <color name="amber">#FFC16B</color>
+    <color name="danger">#FF7085</color>
+
+    <color name="text_primary">#F3F6FF</color>
+    <color name="text_secondary">#9CA8C7</color>
+    <color name="text_muted">#6D7899</color>
+    <color name="white">#FFFFFF</color>
+    <color name="white_10">#1AFFFFFF</color>
+    <color name="white_6">#0FFFFFFF</color>
+
+    <color name="input_fill">#141B2E</color>
+    <color name="scrim">#C2080B16</color>
+    <color name="snack_bg">#222B48</color>
+
+    <!-- legacy names kept for compatibility with the old Sketchware theme -->
+    <color name="colorPrimary">@color/violet</color>
+    <color name="colorPrimaryDark">@color/bg_deep</color>
+    <color name="colorAccent">@color/mint</color>
+    <color name="colorControlHighlight">#33FFFFFF</color>
+    <color name="colorControlNormal">@color/text_secondary</color>
 </resources>

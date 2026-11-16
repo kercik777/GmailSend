@@ -1,253 +1,486 @@
 package com.gmail;
 
-import android.Manifest;
-import android.animation.*;
-import android.app.*;
-import android.content.*;
-import android.content.ClipData;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.res.*;
-import android.graphics.*;
-import android.graphics.drawable.*;
-import android.media.*;
-import android.net.*;
-import android.os.*;
-import android.text.*;
-import android.text.style.*;
-import android.util.*;
-import android.view.*;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.TextUtils;
+import android.util.Patterns;
+import android.view.LayoutInflater;
 import android.view.View;
-import android.view.View.*;
-import android.view.animation.*;
-import android.webkit.*;
-import android.widget.*;
+import android.view.animation.OvershootInterpolator;
 import android.widget.Button;
-import android.widget.EditText;
-import androidx.annotation.*;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.fragment.app.DialogFragment;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
-import com.google.android.material.appbar.AppBarLayout;
-import java.io.*;
-import java.text.*;
-import java.util.*;
-import java.util.regex.*;
-import org.json.*;
+import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+import javax.activation.DataSource;
+
+/** Главный экран: создание письма, вложения и отправка. */
 public class MainActivity extends AppCompatActivity {
-	
-	public final int REQ_CD_PICK = 101;
-	public final int REQ_CD_PICK2 = 102;
-	
-	private Toolbar _toolbar;
-	private AppBarLayout _app_bar;
-	private CoordinatorLayout _coordinator;
-	private String file2 = "";
-	
-	private EditText edittext1;
-	private Button button3;
-	private Button button2;
-	private Button button1;
-	
-	private Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
-	private Intent pick2 = new Intent(Intent.ACTION_GET_CONTENT);
-	
-	@Override
-	protected void onCreate(Bundle _savedInstanceState) {
-		super.onCreate(_savedInstanceState);
-		setContentView(R.layout.main);
-		initialize(_savedInstanceState);
-		
-		if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED) {
-			ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.READ_EXTERNAL_STORAGE}, 1000);
-		} else {
-			initializeLogic();
-		}
-	}
-	
-	@Override
-	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-		if (requestCode == 1000) {
-			initializeLogic();
-		}
-	}
-	
-	private void initialize(Bundle _savedInstanceState) {
-		_app_bar = findViewById(R.id._app_bar);
-		_coordinator = findViewById(R.id._coordinator);
-		_toolbar = findViewById(R.id._toolbar);
-		setSupportActionBar(_toolbar);
-		getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-		getSupportActionBar().setHomeButtonEnabled(true);
-		_toolbar.setNavigationOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View _v) {
-				onBackPressed();
-			}
-		});
-		edittext1 = findViewById(R.id.edittext1);
-		button3 = findViewById(R.id.button3);
-		button2 = findViewById(R.id.button2);
-		button1 = findViewById(R.id.button1);
-		pick.setType("*/*");
-		pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-		pick2.setType("*/*");
-		pick2.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-		
-		button3.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View _view) {
-				startActivityForResult(pick2, REQ_CD_PICK2);
-			}
-		});
-		
-		button2.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View _view) {
-				startActivityForResult(pick, REQ_CD_PICK);
-			}
-		});
-		
-		button1.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View _view) {
-				GmailSender.sendEmail("bayramsanazarow1997@gmail.com", "tema", edittext1.getText().toString(), selectedFiles, new GmailSender.Callback() {
-					@Override
-					public void onSuccess() {
-						runOnUiThread(() -> {
-							selectedFiles.clear(); // очищаем список выбранных файлов после успешной отправки
-							SketchwareUtil.showMessage(getApplicationContext(), "успеешь");
-						});
-					}
-					
-					@Override
-					public void onError(String errorMessage) {
-						runOnUiThread(() -> {
-							SketchwareUtil.showMessage(getApplicationContext(), errorMessage);
-						});
-					}
-				});
-				
-			}
-		});
-	}
-	
-	private void initializeLogic() {
-	}
-	
-	@Override
-	protected void onActivityResult(int _requestCode, int _resultCode, Intent _data) {
-		super.onActivityResult(_requestCode, _resultCode, _data);
-		
-		switch (_requestCode) {
-			case REQ_CD_PICK:
-			if (_resultCode == Activity.RESULT_OK) {
-				ArrayList<String> _filePath = new ArrayList<>();
-				if (_data != null) {
-					if (_data.getClipData() != null) {
-						for (int _index = 0; _index < _data.getClipData().getItemCount(); _index++) {
-							ClipData.Item _item = _data.getClipData().getItemAt(_index);
-							_filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), _item.getUri()));
-						}
-					}
-					else {
-						_filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), _data.getData()));
-					}
-				}
-				selectedFiles.addAll(_filePath);
-			}
-			else {
-				
-			}
-			break;
-			
-			case REQ_CD_PICK2:
-			if (_resultCode == Activity.RESULT_OK) {
-				ArrayList<String> _filePath = new ArrayList<>();
-				if (_data != null) {
-					if (_data.getClipData() != null) {
-						for (int _index = 0; _index < _data.getClipData().getItemCount(); _index++) {
-							ClipData.Item _item = _data.getClipData().getItemAt(_index);
-							_filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), _item.getUri()));
-						}
-					}
-					else {
-						_filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), _data.getData()));
-					}
-				}
-				selectedFiles.add(_filePath.get((int)(0)));
-			}
-			else {
-				
-			}
-			break;
-			default:
-			break;
-		}
-	}
-	
-	public void _t() {
-	}
-	private List<String> selectedFiles = new ArrayList<>();
-	{
-	}
-	
-	
-	@Deprecated
-	public void showMessage(String _s) {
-		Toast.makeText(getApplicationContext(), _s, Toast.LENGTH_SHORT).show();
-	}
-	
-	@Deprecated
-	public int getLocationX(View _v) {
-		int _location[] = new int[2];
-		_v.getLocationInWindow(_location);
-		return _location[0];
-	}
-	
-	@Deprecated
-	public int getLocationY(View _v) {
-		int _location[] = new int[2];
-		_v.getLocationInWindow(_location);
-		return _location[1];
-	}
-	
-	@Deprecated
-	public int getRandom(int _min, int _max) {
-		Random random = new Random();
-		return random.nextInt(_max - _min + 1) + _min;
-	}
-	
-	@Deprecated
-	public ArrayList<Double> getCheckedItemPositionsToArray(ListView _list) {
-		ArrayList<Double> _result = new ArrayList<Double>();
-		SparseBooleanArray _arr = _list.getCheckedItemPositions();
-		for (int _iIdx = 0; _iIdx < _arr.size(); _iIdx++) {
-			if (_arr.valueAt(_iIdx))
-			_result.add((double)_arr.keyAt(_iIdx));
-		}
-		return _result;
-	}
-	
-	@Deprecated
-	public float getDip(int _input) {
-		return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, _input, getResources().getDisplayMetrics());
-	}
-	
-	@Deprecated
-	public int getDisplayWidthPixels() {
-		return getResources().getDisplayMetrics().widthPixels;
-	}
-	
-	@Deprecated
-	public int getDisplayHeightPixels() {
-		return getResources().getDisplayMetrics().heightPixels;
-	}
-}
+
+    private static final String[] ANY_FILE = {"*/*"};
+
+    private SettingsStore store;
+
+    private FrameLayout root;
+    private View statusCard;
+    private View statusDot;
+    private TextView statusTitle;
+    private TextView statusSubtitle;
+    private TextView statSent;
+    private TextView statFiles;
+    private TextInputLayout tilTo;
+    private TextInputLayout tilSubject;
+    private TextInputEditText editTo;
+    private TextInputEditText editSubject;
+    private TextInputEditText editBody;
+    private TextView attachmentsTitle;
+    private TextView attachmentsCount;
+    private LinearLayout attachmentsContainer;
+    private Button btnSend;
+    private View progressOverlay;
+    private View successOverlay;
+    private View successCard;
+    private View successRing;
+    private TextView successDetail;
+    private ConfettiView confettiView;
+
+    private final List<Attachment> attachments = new ArrayList<>();
+
+    private ActivityResultLauncher<String[]> pickOne;
+    private ActivityResultLauncher<String[]> pickMany;
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable hideSuccessRunnable = this::hideSuccess;
+
+    private ValueAnimator pulseAnimator;
+    private boolean sending;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        store = new SettingsStore(this);
+        bindViews();
+        registerPickers();
+        setupListeners();
+        startPulse();
+
+        if (savedInstanceState == null) {
+            restoreDraft();
+        }
+        renderAttachments();
+        refreshStatus();
+    }
+
+    private void bindViews() {
+        root = findViewById(R.id.root);
+        statusCard = findViewById(R.id.statusCard);
+        statusDot = findViewById(R.id.statusDot);
+        statusTitle = findViewById(R.id.statusTitle);
+        statusSubtitle = findViewById(R.id.statusSubtitle);
+        statSent = findViewById(R.id.statSent);
+        statFiles = findViewById(R.id.statFiles);
+        tilTo = findViewById(R.id.tilTo);
+        tilSubject = findViewById(R.id.tilSubject);
+        editTo = findViewById(R.id.editTo);
+        editSubject = findViewById(R.id.editSubject);
+        editBody = findViewById(R.id.editBody);
+        attachmentsTitle = findViewById(R.id.attachmentsTitle);
+        attachmentsCount = findViewById(R.id.attachmentsCount);
+        attachmentsContainer = findViewById(R.id.attachmentsContainer);
+        btnSend = findViewById(R.id.btnSend);
+        progressOverlay = findViewById(R.id.progressOverlay);
+        successOverlay = findViewById(R.id.successOverlay);
+        successCard = findViewById(R.id.successCard);
+        successRing = findViewById(R.id.successRing);
+        successDetail = findViewById(R.id.successDetail);
+        confettiView = findViewById(R.id.confettiView);
+    }
+
+    private void registerPickers() {
+        pickOne = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    if (uri != null) {
+                        addAttachment(uri);
+                    }
+                });
+
+        pickMany = registerForActivityResult(
+                new ActivityResultContracts.OpenMultipleDocuments(),
+                uris -> {
+                    if (uris != null) {
+                        for (Uri uri : uris) {
+                            addAttachment(uri);
+                        }
+                    }
+                });
+    }
+
+    private void setupListeners() {
+        View.OnClickListener openSettings = v -> startActivity(new Intent(this, SettingsActivity.class));
+        findViewById(R.id.btnSettings).setOnClickListener(openSettings);
+        statusCard.setOnClickListener(openSettings);
+
+        findViewById(R.id.btnAddOne).setOnClickListener(v -> pickOne.launch(ANY_FILE));
+        findViewById(R.id.btnAddMany).setOnClickListener(v -> pickMany.launch(ANY_FILE));
+        btnSend.setOnClickListener(v -> attemptSend());
+
+        successOverlay.setOnClickListener(v -> hideSuccess());
+        findViewById(R.id.btnSuccessClose).setOnClickListener(v -> hideSuccess());
+    }
+
+    private void startPulse() {
+        pulseAnimator = ValueAnimator.ofFloat(1f, 0.35f, 1f);
+        pulseAnimator.setDuration(2400L);
+        pulseAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        pulseAnimator.addUpdateListener(animation ->
+                statusDot.setAlpha((float) animation.getAnimatedValue()));
+        pulseAnimator.start();
+    }
+
+    // --- состояние экрана ---
+
+    private void refreshStatus() {
+        boolean configured = store.isConfigured();
+        statusTitle.setText(configured ? R.string.status_ready : R.string.status_not_configured);
+        statusSubtitle.setText(configured ? store.getEmail() : getString(R.string.status_hint));
+        statusDot.setBackgroundResource(configured ? R.drawable.dot_ok : R.drawable.dot_warn);
+        statSent.setText(String.valueOf(store.getSentCount()));
+        statFiles.setText(String.valueOf(store.getTotalFiles()));
+
+        if (TextUtils.isEmpty(editTo.getText()) && !store.getDefaultTo().isEmpty()) {
+            editTo.setText(store.getDefaultTo());
+        }
+    }
+
+    private void restoreDraft() {
+        if (!store.getDraftSubject().isEmpty()) {
+            editSubject.setText(store.getDraftSubject());
+        }
+        if (!store.getDraftBody().isEmpty()) {
+            editBody.setText(store.getDraftBody());
+        }
+        String defaultTo = store.getDefaultTo();
+        if (!store.getDraftTo().isEmpty()) {
+            editTo.setText(store.getDraftTo());
+        } else if (!defaultTo.isEmpty()) {
+            editTo.setText(defaultTo);
+        }
+    }
+
+    private void saveDraft() {
+        store.saveDraft(text(editTo), text(editSubject), text(editBody));
+    }
+
+    // --- вложения ---
+
+    private void addAttachment(Uri uri) {
+        if (uri == null) {
+            return;
+        }
+        try {
+            getContentResolver().takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+            // Не все провайдеры поддерживают persistable-разрешения.
+        }
+        for (Attachment existing : attachments) {
+            if (existing.uri.equals(uri)) {
+                return;
+            }
+        }
+        attachments.add(Attachment.from(this, uri));
+        renderAttachments();
+    }
+
+    private void renderAttachments() {
+        attachmentsContainer.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
+
+        for (int i = 0; i < attachments.size(); i++) {
+            final Attachment attachment = attachments.get(i);
+            View row = inflater.inflate(R.layout.item_attachment, attachmentsContainer, false);
+
+            TextView name = row.findViewById(R.id.fileName);
+            TextView meta = row.findViewById(R.id.fileMeta);
+            ImageButton remove = row.findViewById(R.id.btnRemove);
+
+            name.setText(attachment.name);
+            meta.setText(formatSize(attachment.size) + "  ·  " + shortMime(attachment.mime));
+            remove.setOnClickListener(v -> {
+                attachments.remove(attachment);
+                renderAttachments();
+            });
+
+            attachmentsContainer.addView(row);
+            row.setAlpha(0f);
+            row.animate().alpha(1f).setDuration(220L).setStartDelay(i * 35L).start();
+        }
+
+        int count = attachments.size();
+        attachmentsCount.setText(String.valueOf(count));
+        attachmentsTitle.setText(count == 0
+                ? getString(R.string.attachments_empty)
+                : pluralFiles(count));
+    }
+
+    private String shortMime(String mime) {
+        if (mime == null || mime.isEmpty()) {
+            return "FILE";
+        }
+        String[] parts = mime.split("/");
+        String value = parts.length > 1 ? parts[1] : parts[0];
+        value = value.replaceAll("[^A-Za-z0-9.+-]", "");
+        return value.isEmpty() ? "FILE" : value.toUpperCase(Locale.ROOT);
+    }
+
+    private String formatSize(long size) {
+        if (size < 0L) {
+            return getString(R.string.attachment_unknown_size);
+        }
+        if (size < 1024L) {
+            return size + " Б";
+        }
+        if (size < 1024L * 1024L) {
+            return String.format(Locale.getDefault(), "%.1f КБ", size / 1024f);
+        }
+        return String.format(Locale.getDefault(), "%.1f МБ", size / (1024f * 1024f));
+    }
+
+    private String pluralFiles(int count) {
+        int last = count % 10;
+        int lastTwo = count % 100;
+        if (last == 1 && lastTwo != 11) {
+            return count + " файл";
+        }
+        if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) {
+            return count + " файла";
+        }
+        return count + " файлов";
+    }
+
+    // --- отправка ---
+
+    private void attemptSend() {
+        if (sending) {
+            return;
+        }
+        tilTo.setError(null);
+
+        if (!store.isConfigured()) {
+            showSnack(R.string.error_no_config, true);
+            return;
+        }
+
+        String to = text(editTo).trim();
+        if (to.isEmpty() || !validRecipients(to)) {
+            tilTo.setError(getString(R.string.error_email));
+            tilTo.requestFocus();
+            return;
+        }
+        String subject = text(editSubject).trim();
+        if (subject.isEmpty()) {
+            subject = getString(R.string.subject_empty);
+        }
+        String body = text(editBody);
+
+        if (!NetworkUtil.isOnline(this)) {
+            showSnack(R.string.error_no_network, false);
+            return;
+        }
+
+        List<DataSource> sources = new ArrayList<>();
+        for (Attachment attachment : attachments) {
+            sources.add(attachment.toDataSource(this));
+        }
+        int files = sources.size();
+
+        GmailSender.Config config = new GmailSender.Config(
+                store.getEmail(), store.getPassword(), store.getSenderName(),
+                store.getHost(), store.getPort(), store.isSsl());
+
+        setSending(true);
+        GmailSender.send(config, to, subject, body, sources, new GmailSender.Callback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> onSent(files));
+            }
+
+            @Override
+            public void onError(GmailSender.ErrorKind kind, String detail) {
+                runOnUiThread(() -> onSendError(kind));
+            }
+        });
+    }
+
+    private boolean validRecipients(String value) {
+        for (String part : value.split("[,;]")) {
+            String candidate = part.trim();
+            if (candidate.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(candidate).matches()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void setSending(boolean active) {
+        sending = active;
+        btnSend.setEnabled(!active);
+        btnSend.setAlpha(active ? 0.6f : 1f);
+        progressOverlay.setVisibility(active ? View.VISIBLE : View.GONE);
+    }
+
+    private void onSent(int files) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        setSending(false);
+        store.registerSent(files);
+        attachments.clear();
+        renderAttachments();
+        editSubject.setText("");
+        editBody.setText("");
+        saveDraft();
+        refreshStatus();
+        showSuccess(files);
+    }
+
+    private void onSendError(GmailSender.ErrorKind kind) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        setSending(false);
+        int message;
+        switch (kind) {
+            case AUTH:
+                message = R.string.error_auth;
+                break;
+            case NETWORK:
+                message = R.string.error_connection;
+                break;
+            case MESSAGE:
+                message = R.string.error_bad_settings;
+                break;
+            default:
+                message = R.string.error_bad_settings;
+                break;
+        }
+        showSnack(message, true);
+    }
+
+    // --- экраны состояния ---
+
+    private void showSuccess(int files) {
+        successDetail.setText(getString(R.string.success_attachments, files));
+        handler.removeCallbacks(hideSuccessRunnable);
+
+        successOverlay.setVisibility(View.VISIBLE);
+        successOverlay.setAlpha(0f);
+        successOverlay.animate().alpha(1f).setDuration(220L).start();
+
+        successCard.setAlpha(0f);
+        successCard.setScaleX(0.82f);
+        successCard.setScaleY(0.82f);
+        successCard.animate()
+                .alpha(1f).scaleX(1f).scaleY(1f)
+                .setInterpolator(new OvershootInterpolator(1.1f))
+                .setDuration(520L)
+                .start();
+
+        successRing.setScaleX(0.3f);
+        successRing.setScaleY(0.3f);
+        successRing.animate()
+                .scaleX(1f).scaleY(1f)
+                .setStartDelay(120L)
+                .setInterpolator(new OvershootInterpolator(1.6f))
+                .setDuration(600L)
+                .start();
+
+        confettiView.start();
+        handler.postDelayed(hideSuccessRunnable, 5000L);
+    }
+
+    private void hideSuccess() {
+        handler.removeCallbacks(hideSuccessRunnable);
+        if (successOverlay.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        successOverlay.animate().alpha(0f).setDuration(200L)
+                .setListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(android.animation.Animator animation) {
+                        successOverlay.setVisibility(View.GONE);
+                    }
+                }).start();
+    }
+
+    private void showSnack(int messageRes, boolean withSettingsAction) {
+        Snackbar snackbar = Snackbar.make(root, messageRes, Snackbar.LENGTH_LONG);
+        snackbar.setBackgroundTint(ContextCompat.getColor(this, R.color.snack_bg));
+        snackbar.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        snackbar.setActionTextColor(ContextCompat.getColor(this, R.color.mint));
+        if (withSettingsAction) {
+            snackbar.setAction(R.string.action_settings,
+                    v -> startActivity(new Intent(this, SettingsActivity.class)));
+        }
+        snackbar.show();
+    }
+
+    private static String text(TextView view) {
+        return view.getText() == null ? "" : view.getText().toString();
+    }
+
+    // --- жизненный цикл ---
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshStatus();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        saveDraft();
+    }
+
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacks(hideSuccessRunnable);
+        if (pulseAnimator != null) {
+            pulseAnimator.cancel();
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        if (successOverlay.getVisibility() == View.VISIBLE) {
+            hideSuccess();
+            return;
+        }
+        super.onBackPressed();
+    }
+}
