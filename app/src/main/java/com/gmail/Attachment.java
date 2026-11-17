@@ -6,7 +6,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 
-import javax.activation.DataSource;
+import jakarta.activation.DataSource;
 
 /**
  * Вложение, полученное через системный файловый picker (SAF).

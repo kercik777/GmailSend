@@ -24,11 +24,10 @@ public final class NetworkUtil {
                 return false;
             }
             NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
+            // Проверяем именно наличие интернета, а не тип транспорта:
+            // на некоторых устройствах/эмуляторах транспорт может быть нестандартным.
             return capabilities != null
-                    && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
+                    && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
         }
         NetworkInfo info = manager.getActiveNetworkInfo();
         return info != null && info.isConnected();

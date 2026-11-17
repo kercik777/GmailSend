@@ -130,15 +130,13 @@ public class SettingsActivity extends AppCompatActivity {
 
                 @Override
                 public void onError(GmailSender.ErrorKind kind, String detail) {
+                    int message = kind == GmailSender.ErrorKind.AUTH
+                            ? R.string.error_auth
+                            : (kind == GmailSender.ErrorKind.NETWORK
+                            ? R.string.error_connection : R.string.error_bad_settings);
                     runOnUiThread(() -> {
                         setChecking(false);
-                        if (kind == GmailSender.ErrorKind.AUTH) {
-                            snack(R.string.error_auth);
-                        } else if (kind == GmailSender.ErrorKind.NETWORK) {
-                            snack(R.string.error_connection);
-                        } else {
-                            snack(R.string.error_bad_settings);
-                        }
+                        showError(message, detail);
                     });
                 }
             });
@@ -231,6 +229,21 @@ public class SettingsActivity extends AppCompatActivity {
         progressOverlay.setVisibility(active ? View.VISIBLE : View.GONE);
         btnSave.setEnabled(!active);
         btnTest.setEnabled(!active);
+    }
+
+    private void showError(int messageRes, String detail) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        String text = getString(messageRes);
+        if (detail != null && !detail.trim().isEmpty()) {
+            text += "\n\n" + getString(R.string.error_details) + ":\n" + detail;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.error_dialog_title)
+                .setMessage(text)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     private void snack(int messageRes) {

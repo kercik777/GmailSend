@@ -60,12 +60,15 @@
     <string name="help_title">Как получить пароль приложения</string>
     <string name="help_body">Включите двухэтапную аутентификацию в Google Аккаунте, затем создайте 16-значный пароль приложения для «Почты». Обычный пароль от аккаунта здесь не подойдёт.</string>
     <string name="help_open">Открыть страницу паролей приложений</string>
-    <string name="security_note">Почта и пароль шифруются ключом Android Keystore и не покидают устройство. Экран настроек защищён от скриншотов.</string>
+    <string name="security_note">Настройки хранятся только в приватном хранилище приложения и никуда не передаются. Экран настроек защищён от скриншотов.</string>
     <string name="error_settings_email">Введите корректный адрес</string>
     <string name="error_settings_port">Порт от 1 до 65535</string>
     <string name="error_settings_host">Укажите SMTP-хост</string>
     <string name="error_settings_password">Укажите пароль приложения</string>
     <string name="error_no_browser">Не удалось открыть браузер</string>
+    <string name="error_details">Технические детали</string>
+    <string name="error_dialog_title">Не удалось подключиться</string>
+    <string name="error_dialog_hint">Попробованы порты 587 (STARTTLS) и 465 (SSL), а также smtp.googlemail.com. Если провайдер блокирует Gmail, поможет VPN или мобильный интернет.</string>
     <string name="clear_settings">Очистить настройки</string>
     <string name="clear_confirm_title">Очистить настройки?</string>
     <string name="clear_confirm_message">Почта и пароль приложения будут удалены с устройства.</string>

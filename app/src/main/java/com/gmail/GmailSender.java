@@ -2,6 +2,7 @@ package com.gmail;
 
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -9,34 +10,36 @@ import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import javax.activation.CommandMap;
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.activation.MailcapCommandMap;
-import javax.mail.AuthenticationFailedException;
-import javax.mail.Authenticator;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.PasswordAuthentication;
-import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
-import javax.mail.internet.MimeUtility;
+import jakarta.activation.CommandMap;
+import jakarta.activation.DataHandler;
+import jakarta.activation.DataSource;
+import jakarta.activation.MailcapCommandMap;
+import jakarta.mail.AuthenticationFailedException;
+import jakarta.mail.Authenticator;
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
+import jakarta.mail.PasswordAuthentication;
+import jakarta.mail.Session;
+import jakarta.mail.Transport;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeBodyPart;
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.internet.MimeUtility;
 
 /**
- * Отправка писем по SMTP (STARTTLS 587 или SSL 465).
+ * Отправка писем по SMTP через библиотеки из исходного проекта:
+ * com.sun.mail:jakarta.mail:2.0.2 + com.sun.activation:jakarta.activation:2.0.1.
  *
- * Никаких учётных данных в коде: конфигурация приходит из настроек.
- * Вложения читаются потоково из DataSource, поэтому работают с content:// Uri
- * на Android 10+ без разрешений на хранилище.
+ * Как и в оригинале, перебираем несколько SMTP-конфигураций: если порт 587
+ * закрыт провайдером, уходим на 465/SSL и на smtp.googlemail.com.
+ * Учётные данные приходят из настроек, в коде их больше нет.
  */
 public final class GmailSender {
 
     private static final String TAG = "AuroraMail";
-    private static final int TIMEOUT_MS = 20000;
+    private static final int CONNECT_TIMEOUT_MS = 10000;
+    private static final int IO_TIMEOUT_MS = 20000;
 
     public enum ErrorKind { AUTH, NETWORK, MESSAGE, UNKNOWN }
 
@@ -68,6 +71,28 @@ public final class GmailSender {
         }
     }
 
+    /** Одна SMTP-конфигурация для попытки подключения. */
+    private static final class Endpoint {
+        final String host;
+        final int port;
+        final boolean ssl;
+
+        Endpoint(String host, int port, boolean ssl) {
+            this.host = host;
+            this.port = port;
+            this.ssl = ssl;
+        }
+
+        boolean same(Endpoint other) {
+            return host.equalsIgnoreCase(other.host) && port == other.port && ssl == other.ssl;
+        }
+
+        @Override
+        public String toString() {
+            return host + ":" + port + (ssl ? "/SSL" : "/STARTTLS");
+        }
+    }
+
     private static final ExecutorService POOL = Executors.newCachedThreadPool(runnable -> {
         Thread thread = new Thread(runnable, "aurora-mail-worker");
         thread.setDaemon(true);
@@ -84,18 +109,20 @@ public final class GmailSender {
     public static void send(Config config, String to, String subject, String body,
                             List<DataSource> attachments, Callback callback) {
         if (config == null || config.email.isEmpty() || config.password.isEmpty()) {
-            report(callback, new IllegalStateException("SMTP is not configured"));
+            report(callback, new IllegalStateException("SMTP is not configured"), "");
             return;
         }
         POOL.execute(() -> {
+            List<Endpoint> endpoints = endpoints(config);
             try {
-                deliver(config, to, subject, body, attachments);
+                deliver(config, endpoints, to, subject, body, attachments);
                 if (callback != null) {
                     callback.onSuccess();
                 }
             } catch (Exception error) {
-                Log.w(TAG, "Не удалось отправить письмо: " + error.getClass().getSimpleName());
-                report(callback, error);
+                Log.w(TAG, "Не удалось отправить письмо: " + error.getClass().getSimpleName()
+                        + " — " + error.getMessage());
+                report(callback, error, tried(endpoints));
             }
         });
     }
@@ -103,35 +130,136 @@ public final class GmailSender {
     /** Проверка соединения и логина без отправки письма. */
     public static void verify(Config config, Callback callback) {
         if (config == null || config.email.isEmpty() || config.password.isEmpty()) {
-            report(callback, new IllegalStateException("SMTP is not configured"));
+            report(callback, new IllegalStateException("SMTP is not configured"), "");
             return;
         }
         POOL.execute(() -> {
+            List<Endpoint> endpoints = endpoints(config);
             try {
-                Session session = buildSession(config);
-                Transport transport = session.getTransport("smtp");
-                try {
-                    transport.connect(config.host, config.port, config.email, config.password);
-                } finally {
+                connectAny(config, endpoints);
+                if (callback != null) {
+                    callback.onSuccess();
+                }
+            } catch (Exception error) {
+                Log.w(TAG, "Проверка соединения не удалась: " + error.getClass().getSimpleName()
+                        + " — " + error.getMessage());
+                report(callback, error, tried(endpoints));
+            }
+        });
+    }
+
+    // --- перебор конфигураций (как в исходном проекте) ---
+
+    private static List<Endpoint> endpoints(Config config) {
+        List<Endpoint> result = new ArrayList<>();
+        add(result, new Endpoint(config.host, config.port, config.ssl));
+        // Тот же хост, но другой режим — на случай неверно выбранного порта в настройках.
+        if (!"smtp.gmail.com".equalsIgnoreCase(config.host)) {
+            add(result, new Endpoint(config.host, config.ssl ? 587 : 465, !config.ssl));
+        }
+        add(result, new Endpoint("smtp.gmail.com", 587, false));
+        add(result, new Endpoint("smtp.gmail.com", 465, true));
+        add(result, new Endpoint("smtp.googlemail.com", 587, false));
+        add(result, new Endpoint("smtp.googlemail.com", 465, true));
+        return result;
+    }
+
+    private static void add(List<Endpoint> list, Endpoint endpoint) {
+        for (Endpoint existing : list) {
+            if (existing.same(endpoint)) {
+                return;
+            }
+        }
+        list.add(endpoint);
+    }
+
+    private static String tried(List<Endpoint> endpoints) {
+        StringBuilder builder = new StringBuilder("Проверены: ");
+        for (int i = 0; i < endpoints.size(); i++) {
+            if (i > 0) {
+                builder.append(", ");
+            }
+            builder.append(endpoints.get(i));
+        }
+        return builder.toString();
+    }
+
+    private static void deliver(Config config, List<Endpoint> endpoints,
+                                String to, String subject, String body,
+                                List<DataSource> attachments) throws Exception {
+        Exception last = null;
+        for (Endpoint endpoint : endpoints) {
+            try {
+                sendVia(config, endpoint, to, subject, body, attachments);
+                Log.i(TAG, "Письмо отправлено через " + endpoint);
+                return;
+            } catch (AuthenticationFailedException auth) {
+                // Неверный логин — перебирать остальные серверы бессмысленно.
+                throw auth;
+            } catch (Exception error) {
+                last = error;
+                Log.w(TAG, endpoint + " → " + error.getClass().getSimpleName()
+                        + ": " + error.getMessage());
+            }
+        }
+        throw new MessagingException(
+                "Ни один SMTP-сервер не ответил. " + tried(endpoints),
+                last == null ? new Exception("Нет доступных конфигураций") : last);
+    }
+
+    private static void connectAny(Config config, List<Endpoint> endpoints) throws Exception {
+        Exception last = null;
+        for (Endpoint endpoint : endpoints) {
+            Transport transport = null;
+            try {
+                Session session = buildSession(config, endpoint);
+                transport = session.getTransport("smtp");
+                transport.connect(endpoint.host, endpoint.port, config.email, config.password);
+                Log.i(TAG, "Соединение установлено: " + endpoint);
+                return;
+            } catch (AuthenticationFailedException auth) {
+                throw auth;
+            } catch (Exception error) {
+                last = error;
+                Log.w(TAG, endpoint + " → " + error.getClass().getSimpleName()
+                        + ": " + error.getMessage());
+            } finally {
+                if (transport != null) {
                     try {
                         transport.close();
                     } catch (Exception ignored) {
                     }
                 }
-                if (callback != null) {
-                    callback.onSuccess();
-                }
-            } catch (Exception error) {
-                Log.w(TAG, "Проверка соединения не удалась: " + error.getClass().getSimpleName());
-                report(callback, error);
             }
-        });
+        }
+        throw new MessagingException(
+                "Ни один SMTP-сервер не ответил. " + tried(endpoints),
+                last == null ? new Exception("Нет доступных конфигураций") : last);
     }
 
-    private static void deliver(Config config, String to, String subject, String body,
+    private static void sendVia(Config config, Endpoint endpoint,
+                                String to, String subject, String body,
                                 List<DataSource> attachments) throws Exception {
-        Session session = buildSession(config);
+        Transport transport = null;
+        try {
+            Session session = buildSession(config, endpoint);
+            MimeMessage message = buildMessage(session, config, to, subject, body, attachments);
+            transport = session.getTransport("smtp");
+            transport.connect(endpoint.host, endpoint.port, config.email, config.password);
+            transport.sendMessage(message, message.getAllRecipients());
+        } finally {
+            if (transport != null) {
+                try {
+                    transport.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
 
+    private static MimeMessage buildMessage(Session session, Config config,
+                                            String to, String subject, String body,
+                                            List<DataSource> attachments) throws Exception {
         MimeMessage message = new MimeMessage(session);
         message.setFrom(new InternetAddress(config.email, config.displayName, "UTF-8"));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to, false));
@@ -171,37 +299,30 @@ public final class GmailSender {
 
         message.setContent(mixed);
         message.saveChanges();
-
-        Transport transport = session.getTransport("smtp");
-        try {
-            transport.connect(config.host, config.port, config.email, config.password);
-            transport.sendMessage(message, message.getAllRecipients());
-        } finally {
-            try {
-                transport.close();
-            } catch (Exception ignored) {
-            }
-        }
+        return message;
     }
 
-    private static Session buildSession(Config config) {
+    private static Session buildSession(Config config, Endpoint endpoint) {
         Properties props = new Properties();
-        props.put("mail.smtp.host", config.host);
-        props.put("mail.smtp.port", String.valueOf(config.port));
+        props.put("mail.smtp.host", endpoint.host);
+        props.put("mail.smtp.port", String.valueOf(endpoint.port));
         props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.connectiontimeout", String.valueOf(TIMEOUT_MS));
-        props.put("mail.smtp.timeout", String.valueOf(TIMEOUT_MS));
-        props.put("mail.smtp.writetimeout", String.valueOf(TIMEOUT_MS));
-        props.put("mail.smtp.ssl.protocols", "TLSv1.2");
+        props.put("mail.smtp.connectiontimeout", String.valueOf(CONNECT_TIMEOUT_MS));
+        props.put("mail.smtp.timeout", String.valueOf(IO_TIMEOUT_MS));
+        props.put("mail.smtp.writetimeout", String.valueOf(IO_TIMEOUT_MS));
 
-        if (config.ssl) {
+        if (endpoint.ssl) {
+            // Порт 465: SSL сразу, как во второй конфигурации исходного проекта.
             props.put("mail.smtp.ssl.enable", "true");
-            props.put("mail.smtp.socketFactory.port", String.valueOf(config.port));
+            props.put("mail.smtp.socketFactory.port", String.valueOf(endpoint.port));
             props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
             props.put("mail.smtp.socketFactory.fallback", "false");
+            props.put("mail.smtp.ssl.protocols", "TLSv1.2");
         } else {
+            // Порт 587: STARTTLS.
             props.put("mail.smtp.starttls.enable", "true");
             props.put("mail.smtp.starttls.required", "true");
+            props.put("mail.smtp.ssl.protocols", "TLSv1.2");
         }
 
         return Session.getInstance(props, new Authenticator() {
@@ -258,7 +379,7 @@ public final class GmailSender {
         }
     }
 
-    private static void report(Callback callback, Exception error) {
+    private static void report(Callback callback, Exception error, String tried) {
         if (callback == null) {
             return;
         }
@@ -270,7 +391,8 @@ public final class GmailSender {
                 || chain.contains("username and password not accepted")
                 || chain.contains("invalid credentials")) {
             kind = ErrorKind.AUTH;
-        } else if (chain.contains("unknownhost")
+        } else if (chain.contains("mailconnectexception")
+                || chain.contains("unknownhost")
                 || chain.contains("could not connect")
                 || chain.contains("connection timed out")
                 || chain.contains("connect timed out")
@@ -278,7 +400,7 @@ public final class GmailSender {
                 || chain.contains("network is unreachable")
                 || chain.contains("socketexception")
                 || chain.contains("sslhandshake")
-                || chain.contains("socket timeout")) {
+                || chain.contains("ни один smtp-сервер не ответил")) {
             kind = ErrorKind.NETWORK;
         } else if (error instanceof MessagingException) {
             kind = ErrorKind.MESSAGE;
@@ -286,6 +408,9 @@ public final class GmailSender {
             kind = ErrorKind.UNKNOWN;
         }
         String detail = error.getMessage() == null ? error.toString() : error.getMessage();
+        if (tried != null && !tried.isEmpty()) {
+            detail = detail + "\n\n" + tried;
+        }
         callback.onError(kind, detail);
     }
 

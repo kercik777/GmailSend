@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import javax.activation.DataSource;
+import jakarta.activation.DataSource;
 
 /** Потоковое чтение вложения прямо из content:// Uri без промежуточных файлов. */
 public final class UriDataSource implements DataSource {

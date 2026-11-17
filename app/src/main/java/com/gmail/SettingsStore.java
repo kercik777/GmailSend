@@ -3,23 +3,19 @@ package com.gmail;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import androidx.security.crypto.EncryptedSharedPreferences;
-import androidx.security.crypto.MasterKey;
-
 /**
- * Хранилище настроек приложения.
+ * Простое приватное хранилище настроек (без дополнительной библиотеки шифрования).
  *
- * Почта и пароль приложения шифруются ключом из Android Keystore
- * (EncryptedSharedPreferences). Если на устройстве keystore недоступен,
- * используется обычное приватное хранилище приложения — приложение
- * остаётся рабочим, но без аппаратного шифрования.
+ * Приложение делается для себя, поэтому достаточно SharedPreferences в
+ * приватной папке приложения: другие приложения доступа к ним не имеют,
+ * а резервное копирование отключено в манифесте (allowBackup=false).
  *
- * Черновики и счётчики не содержат секретов и хранятся отдельно.
+ * Черновики и счётчики лежат в отдельном файле, чтобы «Очистить настройки»
+ * не обнуляла статистику.
  */
 public final class SettingsStore {
 
-    private static final String SECURE_FILE = "aurora_mail_secure";
-    private static final String PLAIN_FILE = "aurora_mail_plain";
+    private static final String SETTINGS_FILE = "aurora_mail_settings";
     private static final String DATA_FILE = "aurora_mail_data";
 
     private static final String KEY_EMAIL = "email";
@@ -47,22 +43,7 @@ public final class SettingsStore {
 
     public SettingsStore(Context context) {
         Context app = context.getApplicationContext();
-        SharedPreferences secure = null;
-        try {
-            MasterKey masterKey = new MasterKey.Builder(app)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build();
-            secure = EncryptedSharedPreferences.create(
-                    app,
-                    SECURE_FILE,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
-        } catch (Throwable ignored) {
-            // На части устройств keystore может быть недоступен — не роняем приложение.
-            secure = null;
-        }
-        prefs = secure != null ? secure : app.getSharedPreferences(PLAIN_FILE, Context.MODE_PRIVATE);
+        prefs = app.getSharedPreferences(SETTINGS_FILE, Context.MODE_PRIVATE);
         data = app.getSharedPreferences(DATA_FILE, Context.MODE_PRIVATE);
     }
 

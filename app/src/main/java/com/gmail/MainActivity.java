@@ -20,6 +20,7 @@ import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -31,7 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import javax.activation.DataSource;
+import jakarta.activation.DataSource;
 
 /** Главный экран: создание письма, вложения и отправка. */
 public class MainActivity extends AppCompatActivity {
@@ -329,7 +330,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onError(GmailSender.ErrorKind kind, String detail) {
-                runOnUiThread(() -> onSendError(kind));
+                runOnUiThread(() -> onSendError(kind, detail));
             }
         });
     }
@@ -366,7 +367,7 @@ public class MainActivity extends AppCompatActivity {
         showSuccess(files);
     }
 
-    private void onSendError(GmailSender.ErrorKind kind) {
+    private void onSendError(GmailSender.ErrorKind kind, String detail) {
         if (isFinishing() || isDestroyed()) {
             return;
         }
@@ -386,7 +387,23 @@ public class MainActivity extends AppCompatActivity {
                 message = R.string.error_bad_settings;
                 break;
         }
-        showSnack(message, true);
+
+        // Показываем технические детали, чтобы по логу/диалогу сразу было видно,
+        // какой порт и какой хост не ответил.
+        String text = getString(message);
+        if (kind == GmailSender.ErrorKind.NETWORK) {
+            text += "\n\n" + getString(R.string.error_dialog_hint);
+        }
+        if (detail != null && !detail.trim().isEmpty()) {
+            text += "\n\n" + getString(R.string.error_details) + ":\n" + detail;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.error_dialog_title)
+                .setMessage(text)
+                .setPositiveButton(R.string.action_settings,
+                        (dialog, which) -> startActivity(new Intent(this, SettingsActivity.class)))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     // --- экраны состояния ---

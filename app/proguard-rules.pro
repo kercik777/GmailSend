@@ -1,7 +1,8 @@
-# Если минификация будет включена, сохраняем классы JavaMail и модели приложения.
--keep class javax.mail.** { *; }
--keep class javax.activation.** { *; }
+# Если минификация будет включена, сохраняем классы Jakarta Mail и модели приложения.
+-keep class jakarta.mail.** { *; }
+-keep class jakarta.activation.** { *; }
 -keep class com.sun.mail.** { *; }
+-keep class com.sun.activation.** { *; }
 -keep class com.gmail.** { *; }
--dontwarn javax.mail.**
--dontwarn javax.activation.**
+-dontwarn jakarta.mail.**
+-dontwarn jakarta.activation.**

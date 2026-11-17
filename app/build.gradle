@@ -10,8 +10,8 @@ android {
         applicationId 'com.gmail'
         minSdkVersion 21
         targetSdkVersion 34
-        versionCode 2
-        versionName '2.0'
+        versionCode 3
+        versionName '2.1'
     }
 
     buildTypes {
@@ -34,12 +34,20 @@ android {
 }
 
 dependencies {
+    // true  → как в оригинале: положить jakarta.mail-2.0.2.jar и
+    //         jakarta.activation-2.0.1.jar в app/libs/
+    // false → те же библиотеки из Maven Central (собирается из коробки).
+    def useOriginalJars = false
+
+    // Библиотеки из исходного проекта (jakarta.mail 2.0.2 + jakarta.activation 2.0.1).
+    if (useOriginalJars) {
+        implementation fileTree(dir: 'libs', include: ['*.jar'])
+    } else {
+        implementation 'com.sun.mail:jakarta.mail:2.0.2'
+        implementation 'com.sun.activation:jakarta.activation:2.0.1'
+    }
+
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'androidx.activity:activity:1.9.0'
     implementation 'com.google.android.material:material:1.12.0'
-    // Шифрованное хранение почты и пароля приложения (Android Keystore).
-    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
-    // JavaMail, адаптированный под Android (javax.mail + javax.activation).
-    implementation 'com.sun.mail:android-mail:1.6.7'
-    implementation 'com.sun.mail:android-activation:1.6.7'
 }
