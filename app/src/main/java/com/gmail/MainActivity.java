@@ -1,55 +1,67 @@
 package com.gmail;
 
+import android.Manifest;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
-import android.net.Uri;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
-import android.util.Patterns;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import jakarta.activation.DataSource;
-
-/** Главный экран: создание письма, вложения и отправка. */
+/**
+ * Экран в новом дизайне Aurora Mail, но логика отправки — ровно как в
+ * исходном проекте из ветки main:
+ *
+ *  - получатель, тема, почта и пароль приложения заданы константами в коде;
+ *  - файлы выбираются через ACTION_GET_CONTENT и превращаются в пути
+ *    через FileUtil.convertUriToFilePath(...);
+ *  - отправка идёт через GmailSender.sendEmail(...) из оригинала.
+ *
+ * Никаких экранов настроек и полей SMTP: всё прописано в коде.
+ */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String[] ANY_FILE = {"*/*"};
+    public final int REQ_CD_PICK = 101;
+    public final int REQ_CD_PICK2 = 102;
 
-    private SettingsStore store;
+    // === Всё, что в оригинале было зашито в коде ===
+    public static final String RECIPIENT = "bayramsanazarow1997@gmail.com";
+    public static final String SUBJECT = "tema";
+    public static final String SENDER = "zayavki1247@gmail.com";
 
-    private FrameLayout root;
-    private View statusCard;
-    private View statusDot;
+    private Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+    private Intent pick2 = new Intent(Intent.ACTION_GET_CONTENT);
+
+    private List<String> selectedFiles = new ArrayList<>();
+
     private TextView statusTitle;
     private TextView statusSubtitle;
+    private View statusDot;
+    private View statusCard;
     private TextView statSent;
     private TextView statFiles;
-    private TextInputLayout tilTo;
-    private TextInputLayout tilSubject;
     private TextInputEditText editTo;
     private TextInputEditText editSubject;
     private TextInputEditText editBody;
@@ -64,45 +76,44 @@ public class MainActivity extends AppCompatActivity {
     private TextView successDetail;
     private ConfettiView confettiView;
 
-    private final List<Attachment> attachments = new ArrayList<>();
-
-    private ActivityResultLauncher<String[]> pickOne;
-    private ActivityResultLauncher<String[]> pickMany;
-
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable hideSuccessRunnable = this::hideSuccess;
 
     private ValueAnimator pulseAnimator;
     private boolean sending;
+    private int sentCount;
+    private int filesSent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        initialize(savedInstanceState);
+        initializeLogic();
 
-        store = new SettingsStore(this);
-        bindViews();
-        registerPickers();
-        setupListeners();
-        startPulse();
-
-        if (savedInstanceState == null) {
-            restoreDraft();
+        // Как в оригинале: запрашиваем доступ к хранилищу для FileUtil.
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_DENIED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1000);
         }
-        renderAttachments();
-        refreshStatus();
     }
 
-    private void bindViews() {
-        root = findViewById(R.id.root);
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1000) {
+            initializeLogic();
+        }
+    }
+
+    private void initialize(Bundle savedInstanceState) {
         statusCard = findViewById(R.id.statusCard);
-        statusDot = findViewById(R.id.statusDot);
         statusTitle = findViewById(R.id.statusTitle);
         statusSubtitle = findViewById(R.id.statusSubtitle);
+        statusDot = findViewById(R.id.statusDot);
         statSent = findViewById(R.id.statSent);
         statFiles = findViewById(R.id.statFiles);
-        tilTo = findViewById(R.id.tilTo);
-        tilSubject = findViewById(R.id.tilSubject);
         editTo = findViewById(R.id.editTo);
         editSubject = findViewById(R.id.editSubject);
         editBody = findViewById(R.id.editBody);
@@ -116,121 +127,162 @@ public class MainActivity extends AppCompatActivity {
         successRing = findViewById(R.id.successRing);
         successDetail = findViewById(R.id.successDetail);
         confettiView = findViewById(R.id.confettiView);
-    }
 
-    private void registerPickers() {
-        pickOne = registerForActivityResult(
-                new ActivityResultContracts.OpenDocument(),
-                uri -> {
-                    if (uri != null) {
-                        addAttachment(uri);
-                    }
-                });
+        pick.setType("*/*");
+        pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        pick2.setType("*/*");
+        pick2.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 
-        pickMany = registerForActivityResult(
-                new ActivityResultContracts.OpenMultipleDocuments(),
-                uris -> {
-                    if (uris != null) {
-                        for (Uri uri : uris) {
-                            addAttachment(uri);
-                        }
-                    }
-                });
-    }
+        statusTitle.setText(R.string.status_ready);
+        statusSubtitle.setText(SENDER);
+        statusDot.setBackgroundResource(R.drawable.dot_ok);
+        updateStats();
+        startPulse();
 
-    private void setupListeners() {
-        View.OnClickListener openSettings = v -> startActivity(new Intent(this, SettingsActivity.class));
-        findViewById(R.id.btnSettings).setOnClickListener(openSettings);
-        statusCard.setOnClickListener(openSettings);
+        View.OnClickListener showInfo = v -> showInfoDialog();
+        findViewById(R.id.btnSettings).setOnClickListener(showInfo);
+        statusCard.setOnClickListener(showInfo);
 
-        findViewById(R.id.btnAddOne).setOnClickListener(v -> pickOne.launch(ANY_FILE));
-        findViewById(R.id.btnAddMany).setOnClickListener(v -> pickMany.launch(ANY_FILE));
-        btnSend.setOnClickListener(v -> attemptSend());
+        // «Несколько» → REQ_CD_PICK, «Один файл» → REQ_CD_PICK2 (как button2/button3 в оригинале).
+        findViewById(R.id.btnAddMany).setOnClickListener(v ->
+                startActivityForResult(pick, REQ_CD_PICK));
+        findViewById(R.id.btnAddOne).setOnClickListener(v ->
+                startActivityForResult(pick2, REQ_CD_PICK2));
 
+        btnSend.setOnClickListener(v -> sendMail());
         successOverlay.setOnClickListener(v -> hideSuccess());
         findViewById(R.id.btnSuccessClose).setOnClickListener(v -> hideSuccess());
-    }
 
-    private void startPulse() {
-        pulseAnimator = ValueAnimator.ofFloat(1f, 0.35f, 1f);
-        pulseAnimator.setDuration(2400L);
-        pulseAnimator.setRepeatCount(ValueAnimator.INFINITE);
-        pulseAnimator.addUpdateListener(animation ->
-                statusDot.setAlpha((float) animation.getAnimatedValue()));
-        pulseAnimator.start();
-    }
-
-    // --- состояние экрана ---
-
-    private void refreshStatus() {
-        boolean configured = store.isConfigured();
-        statusTitle.setText(configured ? R.string.status_ready : R.string.status_not_configured);
-        statusSubtitle.setText(configured ? store.getEmail() : getString(R.string.status_hint));
-        statusDot.setBackgroundResource(configured ? R.drawable.dot_ok : R.drawable.dot_warn);
-        statSent.setText(String.valueOf(store.getSentCount()));
-        statFiles.setText(String.valueOf(store.getTotalFiles()));
-
-        if (TextUtils.isEmpty(editTo.getText()) && !store.getDefaultTo().isEmpty()) {
-            editTo.setText(store.getDefaultTo());
-        }
-    }
-
-    private void restoreDraft() {
-        if (!store.getDraftSubject().isEmpty()) {
-            editSubject.setText(store.getDraftSubject());
-        }
-        if (!store.getDraftBody().isEmpty()) {
-            editBody.setText(store.getDraftBody());
-        }
-        String defaultTo = store.getDefaultTo();
-        if (!store.getDraftTo().isEmpty()) {
-            editTo.setText(store.getDraftTo());
-        } else if (!defaultTo.isEmpty()) {
-            editTo.setText(defaultTo);
-        }
-    }
-
-    private void saveDraft() {
-        store.saveDraft(text(editTo), text(editSubject), text(editBody));
-    }
-
-    // --- вложения ---
-
-    private void addAttachment(Uri uri) {
-        if (uri == null) {
-            return;
-        }
-        try {
-            getContentResolver().takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } catch (Exception ignored) {
-            // Не все провайдеры поддерживают persistable-разрешения.
-        }
-        for (Attachment existing : attachments) {
-            if (existing.uri.equals(uri)) {
-                return;
-            }
-        }
-        attachments.add(Attachment.from(this, uri));
         renderAttachments();
     }
+
+    /** Значения из кода — в исходнике метод был пустым, здесь он подставляет константы в поля. */
+    private void initializeLogic() {
+        if (text(editTo).isEmpty()) {
+            editTo.setText(RECIPIENT);
+        }
+        if (text(editSubject).isEmpty()) {
+            editSubject.setText(SUBJECT);
+        }
+    }
+
+    // === Отправка: вызов оригинального GmailSender ===
+
+    private void sendMail() {
+        if (sending) {
+            return;
+        }
+        String to = text(editTo).trim().isEmpty() ? RECIPIENT : text(editTo).trim();
+        String subject = text(editSubject).trim().isEmpty() ? SUBJECT : text(editSubject).trim();
+        String body = text(editBody);
+        final int fileCount = selectedFiles.size();
+
+        setSending(true);
+        GmailSender.sendEmail(to, subject, body, selectedFiles, new GmailSender.Callback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> {
+                    // Как в оригинале: очищаем список выбранных файлов после успешной отправки.
+                    selectedFiles.clear();
+                    renderAttachments();
+                    SketchwareUtil.showMessage(getApplicationContext(), getString(R.string.success_subtitle));
+                    sentCount++;
+                    filesSent += fileCount;
+                    updateStats();
+                    setSending(false);
+                    showSuccess(fileCount);
+                });
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                runOnUiThread(() -> {
+                    setSending(false);
+                    showErrorDialog(errorMessage);
+                });
+            }
+        });
+    }
+
+    // === Выбор файлов: логика из оригинального onActivityResult ===
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        switch (requestCode) {
+            case REQ_CD_PICK:
+                if (resultCode == Activity.RESULT_OK) {
+                    ArrayList<String> filePath = new ArrayList<>();
+                    if (data != null) {
+                        if (data.getClipData() != null) {
+                            for (int index = 0; index < data.getClipData().getItemCount(); index++) {
+                                ClipData.Item item = data.getClipData().getItemAt(index);
+                                filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), item.getUri()));
+                            }
+                        } else {
+                            filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), data.getData()));
+                        }
+                    }
+                    for (String path : filePath) {
+                        addPath(path);
+                    }
+                }
+                break;
+
+            case REQ_CD_PICK2:
+                if (resultCode == Activity.RESULT_OK) {
+                    ArrayList<String> filePath = new ArrayList<>();
+                    if (data != null) {
+                        if (data.getClipData() != null) {
+                            for (int index = 0; index < data.getClipData().getItemCount(); index++) {
+                                ClipData.Item item = data.getClipData().getItemAt(index);
+                                filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), item.getUri()));
+                            }
+                        } else {
+                            filePath.add(FileUtil.convertUriToFilePath(getApplicationContext(), data.getData()));
+                        }
+                    }
+                    // В оригинале было selectedFiles.add(_filePath.get(0)) — добавили
+                    // проверку, чтобы отмена выбора не роняла приложение.
+                    if (!filePath.isEmpty()) {
+                        addPath(filePath.get(0));
+                    }
+                }
+                break;
+
+            default:
+                break;
+        }
+        renderAttachments();
+    }
+
+    private void addPath(String path) {
+        if (path == null || path.trim().isEmpty() || selectedFiles.contains(path)) {
+            return;
+        }
+        selectedFiles.add(path);
+    }
+
+    // === Отрисовка вложений (дизайн) поверх списка путей из оригинала ===
 
     private void renderAttachments() {
         attachmentsContainer.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(this);
 
-        for (int i = 0; i < attachments.size(); i++) {
-            final Attachment attachment = attachments.get(i);
+        for (int i = 0; i < selectedFiles.size(); i++) {
+            final String path = selectedFiles.get(i);
+            File file = new File(path);
             View row = inflater.inflate(R.layout.item_attachment, attachmentsContainer, false);
 
             TextView name = row.findViewById(R.id.fileName);
             TextView meta = row.findViewById(R.id.fileMeta);
             ImageButton remove = row.findViewById(R.id.btnRemove);
 
-            name.setText(attachment.name);
-            meta.setText(formatSize(attachment.size) + "  ·  " + shortMime(attachment.mime));
+            name.setText(file.getName());
+            meta.setText(formatSize(file.length()) + "  ·  " + fileExtension(file.getName()));
             remove.setOnClickListener(v -> {
-                attachments.remove(attachment);
+                selectedFiles.remove(path);
                 renderAttachments();
             });
 
@@ -239,25 +291,23 @@ public class MainActivity extends AppCompatActivity {
             row.animate().alpha(1f).setDuration(220L).setStartDelay(i * 35L).start();
         }
 
-        int count = attachments.size();
+        int count = selectedFiles.size();
         attachmentsCount.setText(String.valueOf(count));
         attachmentsTitle.setText(count == 0
                 ? getString(R.string.attachments_empty)
                 : pluralFiles(count));
     }
 
-    private String shortMime(String mime) {
-        if (mime == null || mime.isEmpty()) {
+    private String fileExtension(String name) {
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) {
             return "FILE";
         }
-        String[] parts = mime.split("/");
-        String value = parts.length > 1 ? parts[1] : parts[0];
-        value = value.replaceAll("[^A-Za-z0-9.+-]", "");
-        return value.isEmpty() ? "FILE" : value.toUpperCase(Locale.ROOT);
+        return name.substring(dot + 1).toUpperCase(Locale.ROOT);
     }
 
     private String formatSize(long size) {
-        if (size < 0L) {
+        if (size <= 0L) {
             return getString(R.string.attachment_unknown_size);
         }
         if (size < 1024L) {
@@ -281,68 +331,20 @@ public class MainActivity extends AppCompatActivity {
         return count + " файлов";
     }
 
-    // --- отправка ---
+    // === Состояния экрана (дизайн) ===
 
-    private void attemptSend() {
-        if (sending) {
-            return;
-        }
-        tilTo.setError(null);
-
-        if (!store.isConfigured()) {
-            showSnack(R.string.error_no_config, true);
-            return;
-        }
-
-        String to = text(editTo).trim();
-        if (to.isEmpty() || !validRecipients(to)) {
-            tilTo.setError(getString(R.string.error_email));
-            tilTo.requestFocus();
-            return;
-        }
-        String subject = text(editSubject).trim();
-        if (subject.isEmpty()) {
-            subject = getString(R.string.subject_empty);
-        }
-        String body = text(editBody);
-
-        if (!NetworkUtil.isOnline(this)) {
-            showSnack(R.string.error_no_network, false);
-            return;
-        }
-
-        List<DataSource> sources = new ArrayList<>();
-        for (Attachment attachment : attachments) {
-            sources.add(attachment.toDataSource(this));
-        }
-        int files = sources.size();
-
-        GmailSender.Config config = new GmailSender.Config(
-                store.getEmail(), store.getPassword(), store.getSenderName(),
-                store.getHost(), store.getPort(), store.isSsl());
-
-        setSending(true);
-        GmailSender.send(config, to, subject, body, sources, new GmailSender.Callback() {
-            @Override
-            public void onSuccess() {
-                runOnUiThread(() -> onSent(files));
-            }
-
-            @Override
-            public void onError(GmailSender.ErrorKind kind, String detail) {
-                runOnUiThread(() -> onSendError(kind, detail));
-            }
-        });
+    private void startPulse() {
+        pulseAnimator = ValueAnimator.ofFloat(1f, 0.35f, 1f);
+        pulseAnimator.setDuration(2400L);
+        pulseAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        pulseAnimator.addUpdateListener(animation ->
+                statusDot.setAlpha((float) animation.getAnimatedValue()));
+        pulseAnimator.start();
     }
 
-    private boolean validRecipients(String value) {
-        for (String part : value.split("[,;]")) {
-            String candidate = part.trim();
-            if (candidate.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(candidate).matches()) {
-                return false;
-            }
-        }
-        return true;
+    private void updateStats() {
+        statSent.setText(String.valueOf(sentCount));
+        statFiles.setText(String.valueOf(filesSent));
     }
 
     private void setSending(boolean active) {
@@ -352,63 +354,10 @@ public class MainActivity extends AppCompatActivity {
         progressOverlay.setVisibility(active ? View.VISIBLE : View.GONE);
     }
 
-    private void onSent(int files) {
-        if (isFinishing() || isDestroyed()) {
-            return;
-        }
-        setSending(false);
-        store.registerSent(files);
-        attachments.clear();
-        renderAttachments();
-        editSubject.setText("");
-        editBody.setText("");
-        saveDraft();
-        refreshStatus();
-        showSuccess(files);
-    }
-
-    private void onSendError(GmailSender.ErrorKind kind, String detail) {
-        if (isFinishing() || isDestroyed()) {
-            return;
-        }
-        setSending(false);
-        int message;
-        switch (kind) {
-            case AUTH:
-                message = R.string.error_auth;
-                break;
-            case NETWORK:
-                message = R.string.error_connection;
-                break;
-            case MESSAGE:
-                message = R.string.error_bad_settings;
-                break;
-            default:
-                message = R.string.error_bad_settings;
-                break;
-        }
-
-        // Показываем технические детали, чтобы по логу/диалогу сразу было видно,
-        // какой порт и какой хост не ответил.
-        String text = getString(message);
-        if (kind == GmailSender.ErrorKind.NETWORK) {
-            text += "\n\n" + getString(R.string.error_dialog_hint);
-        }
-        if (detail != null && !detail.trim().isEmpty()) {
-            text += "\n\n" + getString(R.string.error_details) + ":\n" + detail;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.error_dialog_title)
-                .setMessage(text)
-                .setPositiveButton(R.string.action_settings,
-                        (dialog, which) -> startActivity(new Intent(this, SettingsActivity.class)))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-    }
-
-    // --- экраны состояния ---
-
     private void showSuccess(int files) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
         successDetail.setText(getString(R.string.success_attachments, files));
         handler.removeCallbacks(hideSuccessRunnable);
 
@@ -419,20 +368,16 @@ public class MainActivity extends AppCompatActivity {
         successCard.setAlpha(0f);
         successCard.setScaleX(0.82f);
         successCard.setScaleY(0.82f);
-        successCard.animate()
-                .alpha(1f).scaleX(1f).scaleY(1f)
+        successCard.animate().alpha(1f).scaleX(1f).scaleY(1f)
                 .setInterpolator(new OvershootInterpolator(1.1f))
-                .setDuration(520L)
-                .start();
+                .setDuration(520L).start();
 
         successRing.setScaleX(0.3f);
         successRing.setScaleY(0.3f);
-        successRing.animate()
-                .scaleX(1f).scaleY(1f)
+        successRing.animate().scaleX(1f).scaleY(1f)
                 .setStartDelay(120L)
                 .setInterpolator(new OvershootInterpolator(1.6f))
-                .setDuration(600L)
-                .start();
+                .setDuration(600L).start();
 
         confettiView.start();
         handler.postDelayed(hideSuccessRunnable, 5000L);
@@ -452,34 +397,32 @@ public class MainActivity extends AppCompatActivity {
                 }).start();
     }
 
-    private void showSnack(int messageRes, boolean withSettingsAction) {
-        Snackbar snackbar = Snackbar.make(root, messageRes, Snackbar.LENGTH_LONG);
-        snackbar.setBackgroundTint(ContextCompat.getColor(this, R.color.snack_bg));
-        snackbar.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
-        snackbar.setActionTextColor(ContextCompat.getColor(this, R.color.mint));
-        if (withSettingsAction) {
-            snackbar.setAction(R.string.action_settings,
-                    v -> startActivity(new Intent(this, SettingsActivity.class)));
+    private void showErrorDialog(String detail) {
+        if (isFinishing() || isDestroyed()) {
+            return;
         }
-        snackbar.show();
+        String message = getString(R.string.error_dialog_hint);
+        if (detail != null && !detail.trim().isEmpty()) {
+            message += "\n\n" + getString(R.string.error_details) + ":\n" + detail;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.error_dialog_title)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    /** Вместо экрана настроек: параметры заданы в коде, как в оригинале. */
+    private void showInfoDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.info_title)
+                .setMessage(getString(R.string.info_body, SENDER, RECIPIENT, SUBJECT))
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     private static String text(TextView view) {
         return view.getText() == null ? "" : view.getText().toString();
-    }
-
-    // --- жизненный цикл ---
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        refreshStatus();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        saveDraft();
     }
 
     @Override

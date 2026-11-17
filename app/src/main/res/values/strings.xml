@@ -22,7 +22,7 @@
     <string name="attachment_count_one">%1$d файл</string>
     <string name="attachment_count_many">%1$d файл.</string>
     <string name="attachment_unknown_size">размер неизвестен</string>
-    <string name="footer_note">Защищённое соединение · данные только на устройстве</string>
+    <string name="footer_note">Отправка через Gmail SMTP · параметры заданы в коде</string>
     <string name="sending_title">Отправляем письмо…</string>
     <string name="sending_subtitle">Немного магии и пара секунд</string>
     <string name="success_title">Готово!</string>
@@ -68,6 +68,8 @@
     <string name="error_no_browser">Не удалось открыть браузер</string>
     <string name="error_details">Технические детали</string>
     <string name="error_dialog_title">Не удалось подключиться</string>
+    <string name="info_title">Параметры заданы в коде</string>
+    <string name="info_body">Отправитель: %1$s\nПолучатель: %2$s\nТема: %3$s\n\nПочта, пароль приложения и SMTP-конфигурации прописаны в GmailSender.java и MainActivity.java — как в исходном проекте. Экран настроек не используется.</string>
     <string name="error_dialog_hint">Попробованы порты 587 (STARTTLS) и 465 (SSL), а также smtp.googlemail.com. Если провайдер блокирует Gmail, поможет VPN или мобильный интернет.</string>
     <string name="clear_settings">Очистить настройки</string>
     <string name="clear_confirm_title">Очистить настройки?</string>
